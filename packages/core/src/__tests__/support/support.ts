@@ -23,18 +23,21 @@ export function givenSocketConnector(
 
   const connector = new Connector<net.Socket>(
     {
-      connect: c => {
-        const socket = new net.Socket();
-        const binder = Binder.for(socket)
-          .bind('connect', () => {
-            binder.unbind();
-            c.feetConnected();
-          })
-          .bind('error', (e: Error) => {
-            binder.unbind();
-            c.feedError(e);
-          });
-        return socket.connect(opts);
+      connect: (c, token) => {
+        return new Promise((resolve, reject) => {
+          const socket = new net.Socket();
+          token.onCancellationRequested(() => socket.end());
+          const binder = Binder.for(socket)
+            .bind('connect', () => {
+              binder.unbind();
+              resolve(socket);
+            })
+            .bind('error', (e: Error) => {
+              binder.unbind();
+              reject(e);
+            });
+          socket.connect(opts);
+        });
       },
       close: socket => socket.end(),
       ping:

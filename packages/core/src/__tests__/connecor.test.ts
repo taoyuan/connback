@@ -10,12 +10,12 @@ import {delay} from "@jil/async/timeout";
 describe('connector', () => {
   let server: net.Server;
 
-  beforeAll(done => {
+  beforeEach(done => {
     server = givenEchoTcpServer();
     server.listen(PORT, done);
   });
 
-  afterAll(() => {
+  afterEach(() => {
     if (server.listening) {
       server.close();
     }
@@ -163,20 +163,20 @@ describe('connector', () => {
   });
 
   describe('connecting', () => {
-    it('should connect to the server', done => {
+    it('should connect to the server', async () => {
       const connector = givenSocketConnector();
 
       expect(connector.connecting).toBe(true);
       expect(connector.connected).toBe(false);
 
-      connector.onerror(done);
+      await Promise.all([
+        fromCallback(cb => server.once('connection', () => cb())),
+        Event.toPromise(connector.onconnect),
+      ]);
 
-      server.once('connection', () => {
-        expect(connector.connecting).toBe(false);
-        expect(connector.connected).toBe(true);
-        connector.end();
-        done();
-      });
+      expect(connector.connecting).toBe(false);
+      expect(connector.connected).toBe(true);
+      connector.end();
     });
 
     it('should emit connect', done => {
@@ -201,27 +201,24 @@ describe('connector', () => {
 
   describe('handling offline states', () => {
     it('should emit offline event once when the client transitions from connected states to disconnected ones', done => {
-      const connector = givenSocketConnector({reconnectPeriod: 20});
+      const connector = givenSocketConnector();
 
       connector.onconnect(() => {
         connector.client.end();
       });
 
-      connector.onoffline(async () => {
-        await connector.endAsync(true);
+      connector.onoffline(() => {
+        connector.end(true);
         done();
       });
     });
 
     it('should emit offline event once when the client (at first) can NOT connect to servers', done => {
       // fake a port
-      const connector = givenSocketConnector({reconnectPeriod: 20, port: 4557});
+      const connector = givenSocketConnector({port: 4557});
 
-      connector.onerror(() => {
-      });
-
-      connector.onoffline(async () => {
-        await connector.endAsync(true);
+      connector.onoffline(() => {
+        connector.end(true);
         done();
       });
     });
@@ -247,7 +244,7 @@ describe('connector', () => {
     });
 
     it('should reconnect if nothing is sent', done => {
-      const connector = givenSocketConnector({keepalive: 1, reconnectPeriod: 100});
+      const connector = givenSocketConnector({keepalive: 1, initialDelay: 50, maxDelay: 100});
 
       // Fake no heartbeat being sent by stubbing the feedHeartbeat function
       connector.feedHeartbeat = noop;
@@ -266,11 +263,11 @@ describe('connector', () => {
         done.fail('Client closed connection');
       });
 
-      delay(1000).then(() => {
+      setTimeout(() => {
         unsub();
         connector.end();
         done();
-      }, done);
+      }, 1000);
     });
 
     it('should defer the next ping when rescheduling PingTimer', async () => {

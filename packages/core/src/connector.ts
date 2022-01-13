@@ -1,39 +1,41 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
-import {ValueOrPromise} from '@jil/types';
-import {Event} from '@jil/event';
-import {Emitter} from '@jil/event/emitter';
-import {retimer, Retimer} from '@jil/retimer/dist/retimer';
 import {isPromise} from 'tily/is/promise';
+import {noop} from "tily/function/noop";
+import {ValueOrPromise} from '@jil/types';
+import {Emitter} from '@jil/event/emitter';
+import {retimer, Retimer} from '@jil/retimer';
+import {backoff, BackoffOptions} from "@jil/backoff";
+import {CancellationToken} from '@jil/cancellation';
+import {CancelablePromise, createCancelablePromise} from "@jil/async/cancelable";
+import {raceTimeout} from "@jil/async/race";
 
-const debug = require('debug')('connback');
+const debug = require('debug')('connback:connector');
 
-export type ConnectFn<T> = (connector: Connector<T>) => T;
+export type ConnectFn<T> = (connector: Connector<T>, token: CancellationToken) => ValueOrPromise<T>;
 export type CloseFn<T> = (socket: T, force?: boolean) => ValueOrPromise<any>;
 export type PingFn<T> = (socket: T) => any;
 
-export interface ConnectorOpts {
+export interface ConnectorOpts extends Partial<BackoffOptions> {
   /**
    *  10 seconds, set to 0 to disable
    */
-  keepalive?: number;
-  /**
-   * 1000 milliseconds, interval between two reconnections
-   */
-  reconnectPeriod?: number;
+  keepalive: number;
   /**
    * 30 * 1000 milliseconds, time to wait before a CONNACK is received
    */
-  connectTimeout?: number;
+  connectTimeout: number;
 
-  reschedulePings?: boolean;
+  reschedulePings: boolean;
 }
 
-const DEFAULT_CONNBACK_OPTIONS: Required<ConnectorOpts> = {
+const DEFAULT_CONNBACK_OPTIONS: ConnectorOpts = {
   keepalive: 10,
-  reconnectPeriod: 1000,
   connectTimeout: 15 * 1000,
   reschedulePings: true,
+  initialDelay: 1000,
+  maxDelay: 30 * 1000,
+  maxNumOfAttempts: Infinity,
 };
 
 export interface ConnectorHandlers<T> {
@@ -43,7 +45,7 @@ export interface ConnectorHandlers<T> {
 }
 
 export class Connector<T> {
-  readonly options: Required<ConnectorOpts>;
+  readonly options: ConnectorOpts;
 
   client: T;
 
@@ -66,8 +68,8 @@ export class Connector<T> {
   readonly onoffline = this._onoffline.event;
 
   protected alive = false;
-  protected connectTimer?: NodeJS.Timer;
-  protected reconnectTimer?: Retimer;
+  protected connectRequest?: CancelablePromise<any>;
+  protected reconnectRequest?: CancelablePromise<void>;
   protected pingTimer?: Retimer;
   protected deferredReconnect?: () => void;
 
@@ -84,7 +86,7 @@ export class Connector<T> {
 
     this.onclose(() => this.onClose());
 
-    this.doConnect();
+    this.doConnect().catch(() => this.close());
   }
 
   protected _reconnecting: boolean;
@@ -137,55 +139,44 @@ export class Connector<T> {
     this._connected = value;
   }
 
-  async reconnect() {
-    const perform = () => {
+  reconnect(token?: CancellationToken) {
+    const run = () => {
       this.ending = false;
       this.ended = false;
       this.deferredReconnect = undefined;
-      this.doReconnect();
+      this.doReconnect(token).catch(e => this.emitError(e));
     };
 
     if (this.ending && !this.ended) {
-      this.deferredReconnect = perform;
+      this.deferredReconnect = run;
     } else {
-      perform();
+      run();
     }
   }
 
   end(force?: boolean): this {
     if (this.ending) {
-      debug('Close :: doing nothing...');
+      debug('end :: doing nothing...');
       return this;
     }
 
-    debug('Close :: clearReconnect');
+    debug('end :: clearReconnect');
 
-    this.clearReconnect();
+    this.cancelReconnect();
 
-    debug('Close :: closing');
+    debug('end :: closing');
     this.ending = true;
     this.close(force);
     this.ended = true;
-    debug('Close :: closed');
-    debug('Close :: emit close');
+    debug('end :: closed and emit end');
     this._onend.emit(undefined);
 
     if (this.deferredReconnect) {
-      debug('Close :: call deferred reconnect');
+      debug('end :: call deferred reconnect');
       this.deferredReconnect();
     }
 
     return this;
-  }
-
-  async endAsync(force?: boolean): Promise<this> {
-    if (this.ended) {
-      return this;
-    }
-
-    this.end(force);
-
-    return Event.toPromise(this.onclose).then(() => this);
   }
 
   feedError(error: Error) {
@@ -193,9 +184,9 @@ export class Connector<T> {
     this.feedClose();
   }
 
-  feetConnected() {
-    this.onConnected();
-  }
+  // feetConnected() {
+  //   this.onConnected();
+  // }
 
   /**
    * Call this if disconnected.
@@ -225,7 +216,7 @@ export class Connector<T> {
     this._onerror.emit(error);
   }
 
-  protected doConnect() {
+  protected async doConnect(token?: CancellationToken) {
     if (this.connecting) {
       debug('doConnect :: already connecting, do nothing');
       return;
@@ -233,23 +224,16 @@ export class Connector<T> {
 
     this.connecting = true;
 
-    debug('doConnect :: calling method to clear reconnect');
-    this.clearReconnect();
+    debug('doConnect :: invoke _connect');
+    this.connectRequest = createCancelablePromise(token, async child => this._connect(this, child));
+    await raceTimeout(this.connectRequest, this.options.connectTimeout, () => {
+      this.connectRequest?.cancel();
+      this.connectRequest = undefined;
+    });
 
-    debug('doConnect :: invoke external connect');
-    this.client = this._connect(this);
-
-    if (this.connectTimer) {
-      clearTimeout(this.connectTimer);
-      this.connectTimer = undefined;
-    }
-
-    if (this.options.connectTimeout) {
-      this.connectTimer = setTimeout(() => {
-        debug('!!connectTimeout hit!! Calling close with force `true`');
-        this.close();
-      }, this.options.connectTimeout);
-    }
+    this.client = await this.connectRequest;
+    this.connectRequest = undefined;
+    this.onConnected();
   }
 
   protected onConnected() {
@@ -258,10 +242,10 @@ export class Connector<T> {
     this.connecting = false;
     this.reconnecting = false;
 
-    if (this.connectTimer) {
-      clearTimeout(this.connectTimer);
-      this.connectTimer = undefined;
-    }
+    // if (this.connectTimer) {
+    //   clearTimeout(this.connectTimer);
+    //   this.connectTimer = undefined;
+    // }
 
     debug('handleConnected :: setupPingTimer');
     this.setupPingTimer();
@@ -275,10 +259,11 @@ export class Connector<T> {
     this.connecting = false;
     this.connected = false;
 
-    if (this.connectTimer) {
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    if (this.connectRequest) {
       debug('close :: clearing connect timer');
-      clearTimeout(this.connectTimer);
-      this.connectTimer = undefined;
+      this.connectRequest.cancel();
+      this.connectRequest = undefined;
     }
 
     debug('close :: clearing ping timer');
@@ -291,7 +276,7 @@ export class Connector<T> {
     this.setupReconnect();
   }
 
-  protected doReconnect() {
+  protected async doReconnect(token?: CancellationToken) {
     debug('doReconnect :: emitting reconnect');
     this._onreconnect.emit();
 
@@ -301,14 +286,15 @@ export class Connector<T> {
     }
 
     debug('doReconnect :: calling doConnect');
-    this.doConnect();
+    // eslint-disable-next-line @typescript-eslint/no-shadow
+    return token ? this.doConnect(token) : createCancelablePromise(token => this.doConnect(token));
   }
 
   protected close(force?: boolean) {
     this.connecting = false;
 
     if (this.client) {
-      debug('Close :: invoke external close');
+      debug('close :: invoke _close');
       const value = this._close(this.client, force);
       if (isPromise(value)) {
         value.catch(e => this.emitError(e));
@@ -316,41 +302,62 @@ export class Connector<T> {
     }
 
     if (!this.ending) {
-      debug('Close :: not closing. Clearing and resetting reconnect.');
-      this.clearReconnect();
+      debug('close :: not closing. Clearing and resetting reconnect.');
+      this.cancelReconnect();
       this.setupReconnect();
     }
 
     if (this.pingTimer) {
-      debug('Close :: clearing pingTimer');
+      debug('close :: clearing pingTimer');
       this.pingTimer.clear();
       this.pingTimer = undefined;
     }
   }
 
   protected setupReconnect() {
-    if (!this.ending && !this.reconnectTimer && this.options.reconnectPeriod > 0) {
-      if (!this.reconnecting) {
-        debug('setupReconnect :: emit `offline` state');
-        this._onoffline.emit();
-        debug('setupReconnect :: set `reconnecting` to `true`');
-        this.reconnecting = true;
-      }
-      debug('setupReconnect :: setting reconnectTimer for %d ms', this.options.reconnectPeriod);
-      this.reconnectTimer = retimer(() => {
-        debug('reconnectTimer :: reconnect triggered!');
-        this.doReconnect();
-      }, this.options.reconnectPeriod);
-    } else {
-      debug('setupReconnect :: doing nothing...');
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    if (this.ending || this.reconnectRequest) {
+      // eslint-disable-next-line @typescript-eslint/no-misused-promises
+      debug(`setupReconnect :: doing nothing...`, {ending: this.ending, requesting: !!this.reconnectRequest});
+      return;
     }
+
+    if (!this.reconnecting) {
+      debug('setupReconnect :: emit `offline` state');
+      this._onoffline.emit();
+      debug('setupReconnect :: set `reconnecting` to `true`');
+      this.reconnecting = true;
+    }
+
+    if (this.ended) {
+      debug('setupReconnect :: ended. doing nothing')
+      return;
+    }
+
+    this.reconnectRequest = backoff(async token => {
+      await this.doReconnect(token);
+    }, {
+      retry: (e, attemptNumber) => {
+        this.feedError(e);
+        debug(`backoff attempt: #${attemptNumber}`);
+        return true;
+      }, ...this.options
+    });
+
+    this.reconnectRequest
+      .catch(() => noop)
+      .finally(() => {
+        debug('set `reconnectRequest` to undefined');
+        this.reconnectRequest = undefined;
+      });
   }
 
-  protected clearReconnect() {
-    debug('clearReconnect :: clearing reconnect timer');
-    if (this.reconnectTimer) {
-      this.reconnectTimer.clear();
-      this.reconnectTimer = undefined;
+  protected cancelReconnect() {
+    debug('cancelReconnect :: cancel reconnect request');
+    // eslint-disable-next-line @typescript-eslint/no-misused-promises
+    if (this.reconnectRequest) {
+      this.reconnectRequest.cancel();
+      this.reconnectRequest = undefined;
     }
   }
 

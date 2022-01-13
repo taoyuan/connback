@@ -19,17 +19,18 @@
     "verify": "npm pack && tar xf connback-core*.tgz && tree package && npm run clean"
   },
   "dependencies": {
+    "@jil/backoff": "^0.1.5",
+    "@jil/cancellation": "^0.2.4",
     "@jil/errors": "^0.2.1",
     "@jil/event": "^0.2.4",
-    "@jil/retimer": "^0.1.3",
+    "@jil/retimer": "^0.1.5",
     "@jil/types": "^0.2.2",
     "debug": "^4.3.3",
-    "exponential-backoff": "^3.1.0",
     "p-cancelable": "^3.0.0",
     "tily": "^2.10.1"
   },
   "devDependencies": {
-    "@jil/async": "^0.2.1",
+    "@jil/async": "^0.2.3",
     "@nutol/build": "^0.2.1",
     "@nutol/eslint-config": "^0.2.0",
     "@types/debug": "^4.1.7",
