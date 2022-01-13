@@ -1,0 +1,81 @@
+{
+  "name": "connback",
+  "version": "0.1.0",
+  "description": "The connback root project",
+  "private": true,
+  "engines": {
+    "node": ">=14"
+  },
+  "author": "TY",
+  "license": "Apache-2.0",
+  "scripts": {
+    "bootstrap": "lerna bootstrap",
+    "postinstall": "husky install && npm run -s bootstrap && npm run -s update-ts-project-refs",
+    "update-ts-project-refs": "nb-update-ts-project-refs",
+    "update-packages": "npm run -s update-package-locks",
+    "prerelease": "npm run build:full && cross-env CI=1 npm run jest && npm run lint",
+    "release": "cross-env CI=1 lerna version && lerna publish from-git --yes",
+    "update-package-locks": "nb-rebuild-package-locks",
+    "update-package-deps": "nb-update-package-deps",
+    "update-all-deps": "npm update && lerna exec -- npm update && npm run update-package-locks",
+    "version": "npm run update-package-deps",
+    "outdated": "npm outdated --depth 0 && lerna exec --no-bail \"npm outdated --depth 0\"",
+    "lint": "npm run eslint",
+    "lint:fix": "npm run eslint:fix",
+    "eslint": "nb-eslint --report-unused-disable-directives --cache .",
+    "eslint:fix": "npm run eslint -- --fix",
+    "prettier:cli": "nb-prettier \"**/*.ts\" \"**/*.js\" \"**/*.md\"",
+    "prettier:check": "npm run prettier:cli -- --check",
+    "prettier:fix": "npm run prettier:cli -- --write",
+    "clean": "lerna run clean && nb-clean \"packages/*/dist\"",
+    "clean:lerna": "lerna clean",
+    "build": "nb-tsc -b",
+    "build:full": "npm ci --ignore-scripts && lerna bootstrap --ci && npm run clean && npm run build",
+    "pretest": "npm run clean && npm run build",
+    "test": "npm run jest",
+    "test:ci": "jest --collectCoverage --coverageDirectory=\"./coverage\" --reporters=default --reporters=jest-junit --watchAll=false",
+    "jest": "jest",
+    "posttest": "npm run lint"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@commitlint/cli": "^16.0.2",
+    "@commitlint/config-conventional": "^16.0.0",
+    "@commitlint/travis-cli": "^16.0.2",
+    "@nutol/build": "^0.2.1",
+    "@nutol/eslint-config": "^0.2.0",
+    "@nutol/monorepo": "^0.2.1",
+    "@types/jest": "^27.4.0",
+    "@types/node": "^17.0.8",
+    "@typescript-eslint/eslint-plugin": "^5.9.1",
+    "@typescript-eslint/parser": "^5.9.1",
+    "cross-env": "^7.0.3",
+    "cz-conventional-changelog": "^3.3.0",
+    "eslint": "^8.6.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-plugin-eslint-plugin": "^4.1.0",
+    "eslint-plugin-jest": "^25.3.4",
+    "eslint-plugin-prettier": "^4.0.0",
+    "husky": "^7.0.4",
+    "if-env": "^1.0.4",
+    "jest": "^27.4.7",
+    "jest-junit": "^13.0.0",
+    "lerna": "^4.0.0",
+    "lint-staged": "^12.1.7",
+    "prettier": "^2.5.1",
+    "ts-jest": "^27.1.2",
+    "typescript": "^4.5.4"
+  },
+  "husky": {
+    "hooks": {
+      "commit-msg": "commitlint -E HUSKY_GIT_PARAMS",
+      "pre-commit": "if-env LINT_STAGED=0 && echo \"lint-staged disabled via LINT_STAGED env var\" || lint-staged"
+    }
+  },
+  "config": {
+    "commitizen": {
+      "path": "./node_modules/cz-conventional-changelog"
+    }
+  }
+}
+
