@@ -212,8 +212,8 @@ The following TLS errors will be emitted as an `error` event if feed correctly:
 
 `() => any`
 
-Emitted when [end()](#end) is called. If a callback was passed to `mqtt.Client#end()`, this event is emitted
-once the callback returns.
+Emitted when [end()](#end) is called. If a callback was passed to `mqtt.Client#end()`, this event is emitted once the
+callback returns.
 
 ---
 
