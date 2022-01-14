@@ -2,8 +2,6 @@
 
 > The core module of connback
 
-[TOC]
-
 ## Installation
 
 ```shell
@@ -107,6 +105,20 @@ connback.end();
 
 ## API
 
+- [Connback](#connbacktconstructorconnector-connectort-options-connbackoptions)
+  - [Event onconnect](#event-onconnect)
+  - [Event onreconnect](#event-onreconnect)
+  - [Event onclose](#event-onclose)
+  - [Event onoffline](#event-onoffline)
+  - [Event onerror](#event-onerror)
+  - [Event onend](#event-onend)
+- [reconnect(token?: CancellationToken): void](#reconnect)
+- [end(force?: boolean): Connback](#end)
+- [reschedulePingTimer()](#reschedulePingTimer)
+- [feedError(error: Error)](#feedError)
+- [feedClose(hasError?: boolean)](#feedClose)
+- [feedHeartbeat()](#feedHeartbeat)
+
 ---
 
 <a name="connback"></a>
@@ -147,35 +159,45 @@ Arguments:
   - `delayFirstAttempt`: `false` Decides whether the `initialDelay` should be applied before the first call. If `false`,
     the first call will occur without a delay
 
-#### Event `onconnect(fn)`
+<a name="onconnect"></a>
+
+#### Event `onconnect`
 
 `(client: T) => any`
 
 Emitted on successful (re)connection
 
-#### Event `onreconnect(fn)`
+<a name="onreconnect"></a>
+
+#### Event `onreconnect`
 
 `() => any`
 
 Emitted when a `reconnect` starts.
 
-#### Event `onclose(fn)`
+<a name="onclose"></a>
+
+#### Event `onclose`
 
 `(hasError: boolean) => any`
 
 Emitted after a disconnection.
 
-#### Event `onoffline(fn)`
+<a name="onoffline"></a>
+
+#### Event `onoffline`
 
 `() => any`
 
 Emitted when the client goes offline.
 
-#### Event `onerror(fn)`
+<a name="onerror"></a>
+
+#### Event `onerror`
 
 `(error: Error) => any`
 
-Emitted if errors fed by [Connback#feedError](#feedError). The classic errors are connecting issues.
+Emitted if errors fed by [feedError](#feedError). The classic errors are connecting issues.
 
 The following TLS errors will be emitted as an `error` event if feed correctly:
 
@@ -184,18 +206,20 @@ The following TLS errors will be emitted as an `error` event if feed correctly:
 - `EADDRINUSE`
 - `ENOTFOUND`
 
-#### Event `onend(fn)`
+<a name="onend"></a>
+
+#### Event `onend`
 
 `() => any`
 
-Emitted when [Connback#end()](#end) is called. If a callback was passed to `mqtt.Client#end()`, this event is emitted
+Emitted when [end()](#end) is called. If a callback was passed to `mqtt.Client#end()`, this event is emitted
 once the callback returns.
 
 ---
 
 <a name="reconnect"></a>
 
-### `Connback#reconnect(token?: CancellationToken): void`
+### `reconnect(token?: CancellationToken): void`
 
 Connect again using the same options as connect(), accepts the following options:
 
@@ -206,7 +230,7 @@ Connect again using the same options as connect(), accepts the following options
 
 <a name="end"></a>
 
-### `Connback#end(force?: boolean): Connback`
+### `end(force?: boolean): Connback`
 
 Close the client, accepts the following options:
 
@@ -217,7 +241,7 @@ Close the client, accepts the following options:
 
 <a name="reschedulePingTimer"></a>
 
-### `Connback#reschedulePingTimer()`
+### `reschedulePingTimer()`
 
 Reschedule ping timer. Call it after sending other packets to reduce unnecessary network communication when
 
@@ -225,7 +249,7 @@ Reschedule ping timer. Call it after sending other packets to reduce unnecessary
 
 <a name="feedError"></a>
 
-### `Connback#feedError(error: Error)`
+### `feedError(error: Error)`
 
 Feed error event
 
@@ -233,7 +257,7 @@ Feed error event
 
 <a name="feedClose"></a>
 
-### `Connback#feedClose(hasError?: boolean)`
+### `feedClose(hasError?: boolean)`
 
 Feed close event
 
@@ -241,6 +265,6 @@ Feed close event
 
 <a name="feedHeartbeat"></a>
 
-### `Connback#feedHeartbeat()`
+### `feedHeartbeat()`
 
 Feed heartbeat(pong) event
