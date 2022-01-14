@@ -5,6 +5,9 @@
   },
   "references": [
     {
+      "path": "packages/amqp/tsconfig.json"
+    },
+    {
       "path": "packages/core/tsconfig.json"
     }
   ],
