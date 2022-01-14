@@ -1,18 +1,10 @@
 # connback
 
-The connback root project
+> A JavaScript library that provides reconnection functional for general purpose
 
-## Install
+## Packages
 
-From npm,
-
-```sh
-npm i connback
-```
-
-## Usage
-
-__TBD__
+- [@jil/core](packages/core): The core of connback
 
 ## Licence
 

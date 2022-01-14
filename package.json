@@ -1,7 +1,7 @@
 {
   "name": "connback",
   "version": "0.1.0",
-  "description": "The connback root project",
+  "description": "A JavaScript library that provides reconnection functional for general purpose",
   "private": true,
   "engines": {
     "node": ">=14"

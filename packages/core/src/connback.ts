@@ -1,22 +1,42 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import {isPromise} from 'tily/is/promise';
-import {noop} from "tily/function/noop";
+import {noop} from 'tily/function/noop';
 import {ValueOrPromise} from '@jil/types';
 import {Emitter} from '@jil/event/emitter';
 import {retimer, Retimer} from '@jil/retimer';
-import {backoff, BackoffOptions} from "@jil/backoff";
+import {backoff, BackoffOptions} from '@jil/backoff';
 import {CancellationToken} from '@jil/cancellation';
-import {CancelablePromise, createCancelablePromise} from "@jil/async/cancelable";
-import {raceTimeout} from "@jil/async/race";
+import {CancelablePromise, createCancelablePromise} from '@jil/async/cancelable';
+import {raceTimeout} from '@jil/async/race';
 
-const debug = require('debug')('connback:connector');
+const debug = require('debug')('connback:core');
 
-export type ConnectFn<T> = (connector: Connector<T>, token: CancellationToken) => ValueOrPromise<T>;
-export type CloseFn<T> = (socket: T, force?: boolean) => ValueOrPromise<any>;
-export type PingFn<T> = (socket: T) => any;
+export interface Connector<T> {
+  /**
+   * connects to the server and returns a connection or promise after connected.
+   *
+   * @param connback
+   * @param token
+   */
+  connect(connback: Connback<T>, token: CancellationToken): ValueOrPromise<T>;
 
-export interface ConnectorOpts extends Partial<BackoffOptions> {
+  /**
+   * close the connection
+   *
+   * @param client
+   * @param force
+   */
+  close(client: T, force?: boolean): ValueOrPromise<any>;
+
+  /**
+   * sending ping data if keepalive is enabled
+   * @param client
+   */
+  ping?(client: T): any;
+}
+
+export interface ConnbackOpts extends Partial<Omit<BackoffOptions, 'retry'>> {
   /**
    *  10 seconds, set to 0 to disable
    */
@@ -25,27 +45,20 @@ export interface ConnectorOpts extends Partial<BackoffOptions> {
    * 30 * 1000 milliseconds, time to wait before a CONNACK is received
    */
   connectTimeout: number;
-
-  reschedulePings: boolean;
 }
 
-const DEFAULT_CONNBACK_OPTIONS: ConnectorOpts = {
-  keepalive: 10,
-  connectTimeout: 15 * 1000,
-  reschedulePings: true,
+const DEFAULT_CONNBACK_OPTIONS: ConnbackOpts = {
+  keepalive: 60,
+  connectTimeout: 30 * 1000,
+  strategy: 'fibonacci',
+  jitter: 'full',
   initialDelay: 1000,
   maxDelay: 30 * 1000,
   maxNumOfAttempts: Infinity,
 };
 
-export interface ConnectorHandlers<T> {
-  connect: ConnectFn<T>;
-  close: CloseFn<T>;
-  ping?: PingFn<T>;
-}
-
-export class Connector<T> {
-  readonly options: ConnectorOpts;
+export class Connback<T> {
+  readonly options: ConnbackOpts;
 
   client: T;
 
@@ -61,7 +74,7 @@ export class Connector<T> {
   protected _onreconnect = new Emitter<void>();
   readonly onreconnect = this._onreconnect.event;
 
-  protected _onend = new Emitter<boolean | undefined>();
+  protected _onend = new Emitter<void>();
   readonly onend = this._onend.event;
 
   protected _onoffline = new Emitter<void>();
@@ -73,19 +86,13 @@ export class Connector<T> {
   protected pingTimer?: Retimer;
   protected deferredReconnect?: () => void;
 
-  private readonly _connect: ConnectFn<T>;
-  private readonly _close: CloseFn<T>;
-  private readonly _ping?: PingFn<T>;
+  static create<T>(connector: Connector<T>, options?: ConnbackOpts) {
+    return new Connback(connector, options);
+  }
 
-  constructor(handlers: ConnectorHandlers<T>, options?: ConnectorOpts) {
-    this._connect = handlers.connect;
-    this._close = handlers.close;
-    this._ping = handlers.ping;
-
+  constructor(protected connector: Connector<T>, options?: ConnbackOpts) {
     this.options = {...DEFAULT_CONNBACK_OPTIONS, ...options};
-
     this.onclose(() => this.onClose());
-
     this.doConnect().catch(() => this.close());
   }
 
@@ -139,6 +146,11 @@ export class Connector<T> {
     this._connected = value;
   }
 
+  /**
+   * Connect again using the same options as connect()
+   *
+   * @param token
+   */
   reconnect(token?: CancellationToken) {
     const run = () => {
       this.ending = false;
@@ -154,6 +166,13 @@ export class Connector<T> {
     }
   }
 
+  /**
+   * Close the client
+   *
+   * @param force passing it to true will close the client right away, without
+   *   waiting for the in-flight messages to be ack-ed in some situations.
+   *   This parameter is optional.
+   */
   end(force?: boolean): this {
     if (this.ending) {
       debug('end :: doing nothing...');
@@ -169,7 +188,7 @@ export class Connector<T> {
     this.close(force);
     this.ended = true;
     debug('end :: closed and emit end');
-    this._onend.emit(undefined);
+    this._onend.emit();
 
     if (this.deferredReconnect) {
       debug('end :: call deferred reconnect');
@@ -179,37 +198,44 @@ export class Connector<T> {
     return this;
   }
 
+  /**
+   * Reschedule ping timer. Call it after sending other packets to reduce unnecessary network communication when
+   */
+  reschedulePingTimer() {
+    if (this.pingTimer && this.options.keepalive) {
+      this.pingTimer.reschedule();
+    }
+  }
+
+  /**
+   * Feed error event
+   *
+   * @param error
+   */
   feedError(error: Error) {
     this.emitError(error);
     this.feedClose();
   }
 
-  // feetConnected() {
-  //   this.onConnected();
-  // }
-
   /**
-   * Call this if disconnected.
+   * Feed close event
    *
    * @param hasError true if the connection had a transmission error.
    *
    * @example
    *  ...
-   *  socket.on('close', hasError => connectivity.feedDisconnect(hasError));
+   *  socket.on('close', hasError => connback.feedClose(hasError));
    *  ...
    */
   feedClose(hasError?: boolean) {
     this._onclose.emit(hasError);
   }
 
+  /**
+   * Feed heartbeat(pong) event
+   */
   feedHeartbeat() {
     this.alive = true;
-  }
-
-  reschedulePingTimer() {
-    if (this.pingTimer && this.options.keepalive && this.options.reschedulePings) {
-      this.pingTimer.reschedule();
-    }
   }
 
   protected emitError(error: Error) {
@@ -224,8 +250,8 @@ export class Connector<T> {
 
     this.connecting = true;
 
-    debug('doConnect :: invoke _connect');
-    this.connectRequest = createCancelablePromise(token, async child => this._connect(this, child));
+    debug('doConnect :: invoke connector.connect');
+    this.connectRequest = createCancelablePromise(token, async child => this.connector.connect(this, child));
     await raceTimeout(this.connectRequest, this.options.connectTimeout, () => {
       this.connectRequest?.cancel();
       this.connectRequest = undefined;
@@ -294,8 +320,8 @@ export class Connector<T> {
     this.connecting = false;
 
     if (this.client) {
-      debug('close :: invoke _close');
-      const value = this._close(this.client, force);
+      debug('close :: invoke connector.close');
+      const value = this.connector.close(this.client, force);
       if (isPromise(value)) {
         value.catch(e => this.emitError(e));
       }
@@ -330,19 +356,23 @@ export class Connector<T> {
     }
 
     if (this.ended) {
-      debug('setupReconnect :: ended. doing nothing')
+      debug('setupReconnect :: ended. doing nothing');
       return;
     }
 
-    this.reconnectRequest = backoff(async token => {
-      await this.doReconnect(token);
-    }, {
-      retry: (e, attemptNumber) => {
-        this.feedError(e);
-        debug(`backoff attempt: #${attemptNumber}`);
-        return true;
-      }, ...this.options
-    });
+    this.reconnectRequest = backoff(
+      async token => {
+        await this.doReconnect(token);
+      },
+      {
+        retry: (e, attemptNumber) => {
+          this.feedError(e);
+          debug(`backoff attempt: #${attemptNumber}`);
+          return true;
+        },
+        ...this.options,
+      },
+    );
 
     this.reconnectRequest
       .catch(() => noop)
@@ -377,7 +407,8 @@ export class Connector<T> {
     if (this.alive) {
       debug('checkPing :: clearing flag and request ping');
       this.alive = false;
-      this._ping?.(this.client);
+      debug('checkPing :: invoke connector.ping');
+      this.connector.ping?.(this.client);
     } else {
       // do a forced close since connection will be in bad shape
       debug('checkPing :: calling close with force true');

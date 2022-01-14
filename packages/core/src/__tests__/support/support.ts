@@ -1,6 +1,7 @@
 import net from 'net';
 import {Binder} from 'event-bind';
-import {Connector, ConnectorOpts, PingFn} from '../../connector';
+import {CancellationToken} from '@jil/cancellation';
+import {Connback, ConnbackOpts, Connector} from '../../connback';
 import {EchoTcpServer} from './server';
 import * as ports from './ports';
 
@@ -8,12 +9,41 @@ export function givenEchoTcpServer() {
   return new EchoTcpServer();
 }
 
-export type ConnectOptions = ConnectorOpts &
+export type ConnectOptions = ConnbackOpts &
   net.TcpSocketConnectOpts & {
-    ping: PingFn<net.Socket>;
+    ping?: Connector<net.Socket>['ping'];
   };
 
-export function givenSocketConnector(
+class TcpConnector implements Connector<net.Socket> {
+  constructor(public opts: ConnectOptions) {
+    if (opts.ping) {
+      this.ping = opts.ping;
+    }
+  }
+
+  connect = (_: Connback<net.Socket>, token: CancellationToken) => {
+    return new Promise<net.Socket>((resolve, reject) => {
+      const socket = new net.Socket();
+      token.onCancellationRequested(() => socket.end());
+      const binder = Binder.for(socket)
+        .bind('connect', () => {
+          binder.unbind();
+          resolve(socket);
+        })
+        .bind('error', (e: Error) => {
+          binder.unbind();
+          reject(e);
+        });
+      socket.connect(this.opts);
+    });
+  };
+
+  close = (client: net.Socket) => client.end();
+
+  ping = (client: net.Socket) => client.write('hello');
+}
+
+export function givenTcpConnback(
   portOrOpts: number | Partial<ConnectOptions> = ports.PORT,
   options?: Partial<ConnectOptions>,
 ) {
@@ -21,43 +51,17 @@ export function givenSocketConnector(
   opts.host = '127.0.0.1';
   opts.port = opts.port ?? ports.PORT;
 
-  const connector = new Connector<net.Socket>(
-    {
-      connect: (c, token) => {
-        return new Promise((resolve, reject) => {
-          const socket = new net.Socket();
-          token.onCancellationRequested(() => socket.end());
-          const binder = Binder.for(socket)
-            .bind('connect', () => {
-              binder.unbind();
-              resolve(socket);
-            })
-            .bind('error', (e: Error) => {
-              binder.unbind();
-              reject(e);
-            });
-          socket.connect(opts);
-        });
-      },
-      close: socket => socket.end(),
-      ping:
-        opts.ping ??
-        (socket => {
-          socket.write('hello');
-        }),
-    },
-    opts,
-  );
+  const connback = new Connback<net.Socket>(new TcpConnector(opts), opts);
 
-  connector.onconnect(socket => {
+  connback.onconnect(socket => {
     const binder = Binder.for(socket)
-      .bind('error', (error: Error) => connector.feedError(error))
-      .bind('data', () => connector.feedHeartbeat())
-      .bind('close', (hasError?: boolean) => connector.feedClose(hasError))
+      .bind('error', (error: Error) => connback.feedError(error))
+      .bind('data', () => connback.feedHeartbeat())
+      .bind('close', (hasError?: boolean) => connback.feedClose(hasError))
       .bind('close', () => {
         binder.unbind();
       });
   });
 
-  return connector;
+  return connback;
 }
