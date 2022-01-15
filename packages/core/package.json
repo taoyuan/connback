@@ -1,7 +1,7 @@
 {
   "name": "@connback/core",
   "description": "A JavaScript library that provides reconnection functional for general purpose",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "keywords": [],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
