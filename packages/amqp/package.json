@@ -23,15 +23,12 @@
   },
   "dependencies": {
     "@connback/core": "^0.1.2",
-    "@jil/cancellation": "^0.2.4",
-    "@jil/event": "^0.2.4",
-    "@jil/types": "^0.2.2",
+    "@jil/common": "^0.2.0",
     "amqplib": "^0.8.0",
     "event-bind": "^0.1.4"
   },
   "devDependencies": {
-    "@jil/async": "^0.2.3",
-    "@nutol/build": "^0.2.0",
+    "@nutol/build": "^0.2.1",
     "@nutol/eslint-config": "^0.2.0",
     "@types/amqplib": "^0.8.2",
     "@types/jest": "^27.4.0",

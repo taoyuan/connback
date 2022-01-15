@@ -1,9 +1,9 @@
 import {SocketConnectOpts} from 'net';
 import * as amqp from 'amqplib';
 import {Binder} from 'event-bind';
-import {ValueOrPromise} from '@jil/types';
-import {CancellationToken} from '@jil/cancellation';
-import {Event} from '@jil/event';
+import {ValueOrPromise} from '@jil/common';
+import {CancellationToken} from '@jil/common/cancellation';
+import {Event} from '@jil/common/event';
 import {Connback, Connector} from '@connback/core';
 import {AmqpConnection, AmqpConnectOpts} from './types';
 

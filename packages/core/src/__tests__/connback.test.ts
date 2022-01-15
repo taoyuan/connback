@@ -1,11 +1,11 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 
 import net from 'net';
-import {Event} from '@jil/event';
 import {fromCallback} from 'tily/promise/fromCallback';
 import {noop} from 'tily/function/noop';
+import {Event} from '@jil/common/event';
+import {delay} from '@jil/common/async/timeout';
 import {givenEchoTcpServer, givenTcpConnback, PORT} from './support';
-import {delay} from '@jil/async/timeout';
 
 describe('connback', () => {
   let server: net.Server;

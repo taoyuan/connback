@@ -1,4 +1,4 @@
-import {Event} from '@jil/event';
+import {Event} from '@jil/common/event';
 import {rabbit} from './support/rabbit';
 import {AmqpConnback} from '../amqp.connback';
 

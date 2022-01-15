@@ -18,17 +18,10 @@
     "jest": "jest",
     "verify": "npm pack && tar xf connback-core*.tgz && tree package && npm run clean"
   },
-  "peerDependencies": {
-    "@jil/cancellation": "^0.2.4",
-    "@jil/types": "^0.2.2"
-  },
   "dependencies": {
-    "@jil/backoff": "^0.1.5",
-    "@jil/cancellation": "^0.2.4",
-    "@jil/errors": "^0.2.1",
-    "@jil/event": "^0.2.4",
-    "@jil/retimer": "^0.1.5",
-    "@jil/types": "^0.2.2",
+    "@jil/backoff": "^0.2.0",
+    "@jil/common": "^0.2.0",
+    "@jil/retimer": "^0.1.6",
     "debug": "^4.3.3",
     "p-cancelable": "^3.0.0",
     "tily": "^2.10.1"

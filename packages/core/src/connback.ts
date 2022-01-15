@@ -2,13 +2,13 @@
 
 import {isPromise} from 'tily/is/promise';
 import {noop} from 'tily/function/noop';
-import {ValueOrPromise} from '@jil/types';
-import {Emitter} from '@jil/event/emitter';
+import {ValueOrPromise} from '@jil/common';
+import {Emitter} from '@jil/common/event/emitter';
 import {retimer, Retimer} from '@jil/retimer';
 import {backoff, BackoffOptions} from '@jil/backoff';
-import {CancellationToken} from '@jil/cancellation';
-import {CancelablePromise, createCancelablePromise} from '@jil/async/cancelable';
-import {raceTimeout} from '@jil/async/race';
+import {CancellationToken} from '@jil/common/cancellation';
+import {CancelablePromise, createCancelablePromise} from '@jil/common/async/cancelable';
+import {raceTimeout} from '@jil/common/async/race';
 
 const debug = require('debug')('connback:core');
 

@@ -1,5 +1,5 @@
 import {$} from 'zx';
-import {timeout} from '@jil/async/timeout';
+import {timeout} from '@jil/common/async/timeout';
 
 export namespace rabbit {
   export const NAME = 'connback.amqp.test';
