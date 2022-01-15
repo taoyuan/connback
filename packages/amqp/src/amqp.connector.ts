@@ -8,7 +8,7 @@ import {Connback, Connector} from '@connback/core';
 import {AmqpConnection, AmqpConnectOpts} from './types';
 
 export class AmqpConnector implements Connector<AmqpConnection> {
-  constructor(public url: string | AmqpConnectOpts, public socketOptions?: SocketConnectOpts) {}
+  constructor(public url: string | AmqpConnectOpts, public socketOptions?: Partial<SocketConnectOpts>) {}
 
   connect = async (connback: Connback<AmqpConnection>, token: CancellationToken): Promise<AmqpConnection> => {
     const connection = await amqp.connect(this.url, this.socketOptions);

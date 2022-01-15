@@ -3,7 +3,7 @@ import {Connback, ConnbackOpts} from '@connback/core';
 import {AmqpConnection, AmqpConnectOpts} from './types';
 import {AmqpConnector} from './amqp.connector';
 
-export type AmqpConnbackOpts = ConnbackOpts & SocketConnectOpts;
+export type AmqpConnbackOpts = ConnbackOpts & Partial<SocketConnectOpts>;
 
 export class AmqpConnback extends Connback<AmqpConnection> {
   constructor(url: string | AmqpConnectOpts, options?: AmqpConnbackOpts) {
