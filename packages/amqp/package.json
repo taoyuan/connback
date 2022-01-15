@@ -1,7 +1,7 @@
 {
   "name": "@connback/amqp",
   "description": "A AMQP connback connector with amqplib",
-  "version": "0.1.3",
+  "version": "0.1.4",
   "keywords": [],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -22,7 +22,7 @@
     "amqplib": "^0.8.0"
   },
   "dependencies": {
-    "@connback/core": "^0.1.3",
+    "@connback/core": "^0.1.4",
     "@jil/common": "^0.2.1",
     "amqplib": "^0.8.0",
     "event-bind": "^0.1.4"
