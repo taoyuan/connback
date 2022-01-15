@@ -1,7 +1,7 @@
 {
   "name": "@connback/amqp",
   "description": "A AMQP connback connector with amqplib",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "keywords": [],
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
