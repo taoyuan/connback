@@ -1,6 +1,6 @@
 import net from 'net';
 import {Binder} from 'event-bind';
-import {CancellationToken} from '@jil/cancellation';
+import {CancellationToken} from '@jil/common/cancellation';
 import {Connback, ConnbackOpts, Connector} from '../../connback';
 import {EchoTcpServer} from './server';
 import * as ports from './ports';
