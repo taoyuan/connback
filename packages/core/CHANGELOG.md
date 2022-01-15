@@ -3,6 +3,14 @@
 All notable changes to this project will be documented in this file.
 See [Conventional Commits](https://conventionalcommits.org) for commit guidelines.
 
+## [0.1.7](https://github.com/taoyuan/connback/compare/@connback/core@0.1.6...@connback/core@0.1.7) (2022-01-15)
+
+**Note:** Version bump only for package @connback/core
+
+
+
+
+
 ## [0.1.6](https://github.com/taoyuan/connback/compare/@connback/core@0.1.5...@connback/core@0.1.6) (2022-01-15)
 
 **Note:** Version bump only for package @connback/core
