@@ -2,6 +2,7 @@
 
 import {isPromise} from 'tily/is/promise';
 import {noop} from 'tily/function/noop';
+import {MarkRequired} from "ts-essentials";
 import {ValueOrPromise} from '@jil/common';
 import {Emitter} from '@jil/common/event/emitter';
 import {retimer, Retimer} from '@jil/retimer';
@@ -36,18 +37,22 @@ export interface Connector<T> {
   ping?(client: T): any;
 }
 
-export interface ConnbackOpts extends Partial<Omit<BackoffOptions, 'retry'>> {
+export interface ConnbackOpts extends Omit<BackoffOptions, 'retry'> {
   /**
    *  10 seconds, set to 0 to disable
    */
-  keepalive: number;
+  keepalive?: number;
   /**
    * 30 * 1000 milliseconds, time to wait before a CONNACK is received
    */
-  connectTimeout: number;
+  connectTimeout?: number;
 }
 
-const DEFAULT_CONNBACK_OPTIONS: ConnbackOpts = {
+type ConnbackConfig = MarkRequired<ConnbackOpts,
+  | 'connectTimeout'
+  | 'keepalive'>
+
+const DEFAULT_CONNBACK_OPTIONS: ConnbackConfig = {
   keepalive: 60,
   connectTimeout: 30 * 1000,
   strategy: 'fibonacci',
@@ -58,7 +63,7 @@ const DEFAULT_CONNBACK_OPTIONS: ConnbackOpts = {
 };
 
 export class Connback<T> {
-  readonly options: ConnbackOpts;
+  readonly options: ConnbackConfig;
 
   client: T;
 
@@ -86,12 +91,8 @@ export class Connback<T> {
   protected pingTimer?: Retimer;
   protected deferredReconnect?: () => void;
 
-  static create<T>(connector: Connector<T>, options?: ConnbackOpts) {
-    return new Connback(connector, options);
-  }
-
   constructor(protected connector: Connector<T>, options?: ConnbackOpts) {
-    this.options = {...DEFAULT_CONNBACK_OPTIONS, ...options};
+    this.options = {...DEFAULT_CONNBACK_OPTIONS, ...options} as ConnbackConfig;
     this.onclose(() => this.onClose());
     this.doConnect().catch(() => this.close());
   }
@@ -144,6 +145,10 @@ export class Connback<T> {
 
   set connected(value: boolean) {
     this._connected = value;
+  }
+
+  static create<T>(connector: Connector<T>, options?: ConnbackOpts) {
+    return new Connback(connector, options);
   }
 
   /**
